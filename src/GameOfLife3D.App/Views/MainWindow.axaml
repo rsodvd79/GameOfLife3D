@@ -1,0 +1,71 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:GameOfLife3D.App.ViewModels"
+        xmlns:controls="using:GameOfLife3D.App.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="GameOfLife3D.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="3D Game of Life"
+        Width="1000" Height="750"
+        MinWidth="800" MinHeight="600">
+
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <DockPanel>
+        <!-- Top toolbar -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8"
+                    Margin="8,6" Background="Transparent">
+            <Button Command="{Binding StartStopCommand}"
+                    Content="{Binding StartStopLabel}"
+                    MinWidth="80"/>
+            <Button Command="{Binding StepCommand}" Content="Step" IsEnabled="{Binding !IsRunning}"/>
+            <Button Command="{Binding RandomizeCommand}" Content="Randomize"/>
+            <Button Command="{Binding ClearCommand}" Content="Clear"/>
+            <Separator Width="1" Margin="4,0" Background="#444"/>
+            <TextBlock VerticalAlignment="Center" Foreground="#aaa">Gen:</TextBlock>
+            <TextBlock VerticalAlignment="Center" Text="{Binding Generation}" MinWidth="60" FontWeight="Bold"/>
+            <TextBlock VerticalAlignment="Center" Foreground="#aaa">Alive:</TextBlock>
+            <TextBlock VerticalAlignment="Center" Text="{Binding LiveCellCount}" MinWidth="60" FontWeight="Bold"/>
+        </StackPanel>
+
+        <!-- Bottom settings panel -->
+        <Border DockPanel.Dock="Bottom" Padding="12,8" Background="#0d0d1a">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto,*,Auto" RowDefinitions="Auto,Auto">
+                <!-- Grid Size -->
+                <TextBlock Grid.Column="0" Grid.Row="0" VerticalAlignment="Center"
+                           Text="Grid Size" Foreground="#ccc" Margin="0,0,8,0"/>
+                <Slider Grid.Column="1" Grid.Row="0" Minimum="10" Maximum="50" TickFrequency="5"
+                        IsSnapToTickEnabled="True"
+                        Value="{Binding GridSize}" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="2" Grid.Row="0" VerticalAlignment="Center"
+                           Text="{Binding GridSizeLabel}" MinWidth="30" Foreground="#00d4aa"/>
+
+                <!-- Speed -->
+                <TextBlock Grid.Column="3" Grid.Row="0" VerticalAlignment="Center"
+                           Text="Speed" Foreground="#ccc" Margin="16,0,8,0"/>
+                <Slider Grid.Column="4" Grid.Row="0" Minimum="1" Maximum="60"
+                        Value="{Binding StepsPerSecond}" Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="5" Grid.Row="0" VerticalAlignment="Center"
+                           Text="{Binding SpeedLabel}" MinWidth="70" Foreground="#00d4aa"/>
+
+                <!-- Survival / Birth rules -->
+                <TextBlock Grid.Column="0" Grid.Row="1" VerticalAlignment="Center"
+                           Text="Survive" Foreground="#ccc" Margin="0,4,8,0"/>
+                <TextBox Grid.Column="1" Grid.Row="1" Text="{Binding SurvivalCounts}"
+                         Watermark="e.g. 5,6,7" Margin="0,4,8,0"/>
+
+                <TextBlock Grid.Column="3" Grid.Row="1" VerticalAlignment="Center"
+                           Text="Birth" Foreground="#ccc" Margin="16,4,8,0"/>
+                <TextBox Grid.Column="4" Grid.Row="1" Text="{Binding BirthCounts}"
+                         Watermark="e.g. 6" Margin="0,4,8,0"/>
+            </Grid>
+        </Border>
+
+        <!-- GL viewport -->
+        <controls:GameOfLifeGlControl MinWidth="600" MinHeight="600"/>
+    </DockPanel>
+</Window>
