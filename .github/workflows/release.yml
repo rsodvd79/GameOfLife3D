@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            artifact: GameOfLife3D-win-x64.zip
+          - os: macos-latest
+            rid: osx-arm64
+            artifact: GameOfLife3D-osx-arm64.zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact: GameOfLife3D-linux-x64.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish
+        run: >
+          dotnet publish src/GameOfLife3D.App/GameOfLife3D.App.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -o publish/${{ matrix.rid }}
+
+      - name: Archive (Windows)
+        if: matrix.os == 'windows-latest'
+        run: Compress-Archive -Path publish/${{ matrix.rid }}/* -DestinationPath ${{ matrix.artifact }}
+        shell: pwsh
+
+      - name: Archive (Unix)
+        if: matrix.os != 'windows-latest'
+        run: zip -jr ${{ matrix.artifact }} publish/${{ matrix.rid }}/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.rid }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        run: |
+          DATE=$(date -u +%Y.%m.%d)
+          SHA=$(git rev-parse --short HEAD)
+          echo "tag=v${DATE}-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "name=Release ${DATE} (${SHA})" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.name }}
+          generate_release_notes: true
+          files: artifacts/*

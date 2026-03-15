@@ -266,30 +266,20 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
         sortedCells.Sort((a, b) => projData[b].depth.CompareTo(projData[a].depth));
 
         // ── Draw tubes first (behind cells) ──
-        using var tubeFillPaint   = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
-        using var tubeGlowPaint   = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
+        using var tubeFillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
 
         foreach (var (sx1, sy1, sx2, sy2, w1, w2, depth) in tubes)
         {
-            float bright    = Math.Clamp(1.15f - depth * 0.5f, 0.25f, 1f);
-            byte  tg        = (byte)(180 * bright);
-            byte  tb        = (byte)(140 * bright);
-            float tubeR     = Math.Min(w1, w2) * 0.9f; // tube radius ≈ 90 % of cell radius
-
-            // Glow halo
-            tubeGlowPaint.StrokeWidth = tubeR * 2.8f;
-            tubeGlowPaint.Color       = new SKColor(0, tg, tb, 35);
-            canvas.DrawLine(sx1, sy1, sx2, sy2, tubeGlowPaint);
-
-            // Solid core
-            tubeFillPaint.StrokeWidth = tubeR * 1.4f;
+            float bright = Math.Clamp(1.15f - depth * 0.5f, 0.25f, 1f);
+            byte  tg     = (byte)(180 * bright);
+            byte  tb     = (byte)(140 * bright);
+            tubeFillPaint.StrokeWidth = Math.Min(w1, w2) * 0.5f;
             tubeFillPaint.Color       = new SKColor(40, tg, tb, 190);
             canvas.DrawLine(sx1, sy1, sx2, sy2, tubeFillPaint);
         }
 
         // ── Draw cells on top ──
-        using var fillPaint   = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
-        using var strokePaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 0.7f };
+        using var fillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
 
         foreach (int i in sortedCells)
         {
@@ -299,11 +289,8 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
             byte b = (byte)(170 * bright);
             float r = size * 0.5f;
 
-            fillPaint.Color   = new SKColor(0, g, b, 210);
-            strokePaint.Color = new SKColor(0, 255, 210, 70);
-
+            fillPaint.Color = new SKColor(0, g, b, 210);
             canvas.DrawCircle(sx, sy, r, fillPaint);
-            canvas.DrawCircle(sx, sy, r, strokePaint);
         }
     }
 }
