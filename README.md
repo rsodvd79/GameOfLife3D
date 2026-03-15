@@ -8,7 +8,7 @@ La simulazione si svolge su una griglia cubica toroidale (i bordi si collegano t
 
 ## Screenshot
 
-> *Avvia l'applicazione e usa il mouse per ruotare la vista 3D.*
+![3D Game of Life](docs/screenshot.png)
 
 ---
 
