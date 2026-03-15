@@ -17,6 +17,7 @@ public record Shape3D(string Name, (int dx, int dy, int dz)[] Cells)
 /// Categories:
 ///   🔒 Still Life  — mathematically stable: never changes.
 ///   🌱 Seed        — evolves into a stable structure within 1-2 steps.
+///   🔁 Oscillator  — cycles back to its original configuration after N steps.
 ///   📐 Geometric   — interesting starting shape; evolution depends on the active rule.
 /// </summary>
 public static class ShapeLibrary
@@ -80,6 +81,17 @@ public static class ShapeLibrary
         from dy in new[] { 0, 1 }
         select (dx, dy, dz)).ToArray());
 
+    // ── Oscillators ──────────────────────────────────────────────────────────
+
+    // Blinker 2×3×1: a flat 2-wide × 3-tall rectangle (period-2 oscillator).
+    // Under rules that support it (e.g. S4,5 / B5) the slab alternates between
+    // its original orientation and a rotated 3×2×1 configuration each step.
+    private static readonly Shape3D Blinker2x3x1 = new("🔁 Blinker 2×3×1", [
+        (0,-1, 0),(1,-1, 0),
+        (0, 0, 0),(1, 0, 0),
+        (0, 1, 0),(1, 1, 0),
+    ]);
+
     // ── Geometric shapes (free-form seeds) ───────────────────────────────────
 
     private static readonly Shape3D SingleCell = new("📐 Single Cell", [(0, 0, 0)]);
@@ -129,6 +141,8 @@ public static class ShapeLibrary
         ShellSeed,
         CubeSeed,
         SlabSeed,
+        // Oscillators
+        Blinker2x3x1,
         // Free-form geometric
         SingleCell,
         Plane3x3,

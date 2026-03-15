@@ -198,39 +198,102 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
         var proj = Matrix4x4.CreatePerspectiveFieldOfView(MathF.PI / 3f, w / h, 0.1f, 2000f);
         var vp   = view * proj;
 
-        // Project all cells to screen space
-        var projected = new List<(float sx, float sy, float size, float depth)>(_cells.Count);
         float sizeBase = Math.Min(w, h);
 
-        foreach (var (cx, cy, cz) in _cells)
+        // Project all cells; keep a positional lookup for tube detection.
+        // projData[i] corresponds to _cells[i]; null means clipped behind camera.
+        var projData = new (float sx, float sy, float size, float depth)[_cells.Count];
+        var projValid = new bool[_cells.Count];
+        var cellIndex = new Dictionary<(int, int, int), int>(_cells.Count);
+
+        for (int i = 0; i < _cells.Count; i++)
         {
+            var (cx, cy, cz) = _cells[i];
+            cellIndex[(cx, cy, cz)] = i;
+
             var world = new Vector4(cx + 0.5f, cy + 0.5f, cz + 0.5f, 1f);
             var clip  = Vector4.Transform(world, vp);
             if (clip.W <= 0f) continue;
 
-            float invW = 1f / clip.W;
-            float ndcX = clip.X * invW;
-            float ndcY = clip.Y * invW;
+            float invW  = 1f / clip.W;
             float depth = clip.Z * invW;
+            float sx    = (clip.X * invW * 0.5f + 0.5f) * w;
+            float sy    = (1f - (clip.Y * invW * 0.5f + 0.5f)) * h;
+            float size  = Math.Clamp(sizeBase * invW * 0.55f, 2f, 60f);
 
-            // NDC → screen (Y is flipped: +Y up in NDC, +Y down on screen)
-            float sx = (ndcX  * 0.5f + 0.5f) * w;
-            float sy = (1f - (ndcY * 0.5f + 0.5f)) * h;
-
-            // Perspective-correct radius: 1 world unit at this depth
-            float size = Math.Clamp(sizeBase * invW * 0.55f, 2f, 60f);
-            projected.Add((sx, sy, size, depth));
+            projData[i]  = (sx, sy, size, depth);
+            projValid[i] = true;
         }
 
-        // Painter's algorithm: back-to-front
-        projected.Sort(static (a, b) => b.depth.CompareTo(a.depth));
+        // ── Build tube list (orthogonal neighbours only, +x/+y/+z to skip duplicates) ──
+        var tubes = new List<(float sx1, float sy1, float sx2, float sy2, float w1, float w2, float depth)>();
 
-        // Draw as circles with depth shading
+        for (int i = 0; i < _cells.Count; i++)
+        {
+            if (!projValid[i]) continue;
+            var (cx, cy, cz) = _cells[i];
+
+            // Check the 3 positive-direction orthogonal neighbours (avoids duplicate pairs).
+            // Inline instead of stackalloc – stackalloc inside a loop accumulates stack
+            // space until the method returns, causing StackOverflowException at high cell counts.
+            if (cellIndex.TryGetValue((cx + 1, cy,     cz),     out int jx) && projValid[jx])
+            {
+                var (sx1, sy1, s1, d1) = projData[i];
+                var (sx2, sy2, s2, d2) = projData[jx];
+                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f));
+            }
+            if (cellIndex.TryGetValue((cx,     cy + 1, cz),     out int jy) && projValid[jy])
+            {
+                var (sx1, sy1, s1, d1) = projData[i];
+                var (sx2, sy2, s2, d2) = projData[jy];
+                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f));
+            }
+            if (cellIndex.TryGetValue((cx,     cy,     cz + 1), out int jz) && projValid[jz])
+            {
+                var (sx1, sy1, s1, d1) = projData[i];
+                var (sx2, sy2, s2, d2) = projData[jz];
+                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f));
+            }
+        }
+
+        // ── Painter's algorithm: back-to-front for both tubes and cells ──
+        tubes.Sort(static (a, b) => b.depth.CompareTo(a.depth));
+
+        // Build sorted cell index list
+        var sortedCells = new List<int>(_cells.Count);
+        for (int i = 0; i < _cells.Count; i++)
+            if (projValid[i]) sortedCells.Add(i);
+        sortedCells.Sort((a, b) => projData[b].depth.CompareTo(projData[a].depth));
+
+        // ── Draw tubes first (behind cells) ──
+        using var tubeFillPaint   = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
+        using var tubeGlowPaint   = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
+
+        foreach (var (sx1, sy1, sx2, sy2, w1, w2, depth) in tubes)
+        {
+            float bright    = Math.Clamp(1.15f - depth * 0.5f, 0.25f, 1f);
+            byte  tg        = (byte)(180 * bright);
+            byte  tb        = (byte)(140 * bright);
+            float tubeR     = Math.Min(w1, w2) * 0.9f; // tube radius ≈ 90 % of cell radius
+
+            // Glow halo
+            tubeGlowPaint.StrokeWidth = tubeR * 2.8f;
+            tubeGlowPaint.Color       = new SKColor(0, tg, tb, 35);
+            canvas.DrawLine(sx1, sy1, sx2, sy2, tubeGlowPaint);
+
+            // Solid core
+            tubeFillPaint.StrokeWidth = tubeR * 1.4f;
+            tubeFillPaint.Color       = new SKColor(40, tg, tb, 190);
+            canvas.DrawLine(sx1, sy1, sx2, sy2, tubeFillPaint);
+        }
+
+        // ── Draw cells on top ──
         using var fillPaint   = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
         using var strokePaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 0.7f };
 
-        foreach (var (sx, sy, size, depth) in projected)
+        foreach (int i in sortedCells)
         {
+            var (sx, sy, size, depth) = projData[i];
             float bright = Math.Clamp(1.15f - depth * 0.5f, 0.3f, 1f);
             byte g = (byte)(212 * bright);
             byte b = (byte)(170 * bright);
