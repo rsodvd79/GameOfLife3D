@@ -24,6 +24,7 @@ public class GameOfLifeGlControl : Control
     private bool _isDragging;
     private Point _lastMousePos;
     private MainViewModel? _viewModel;
+    private int _lastGridSize = -1;
 
     public GameOfLifeGlControl()
     {
@@ -66,8 +67,30 @@ public class GameOfLifeGlControl : Control
 
     private void UpdateCameraForGrid(int gridSize)
     {
-        _radius = gridSize * 2.2f;
         _target = new Vector3(gridSize / 2f, gridSize / 2f, gridSize / 2f);
+        // Reset radius only when the grid size actually changes, not on every render frame.
+        if (gridSize == _lastGridSize) return;
+        _radius = gridSize * 2.2f;
+        _lastGridSize = gridSize;
+    }
+
+    public void ZoomIn()
+    {
+        _radius = Math.Clamp(_radius * 0.8f, 5f, 500f);
+        InvalidateVisual();
+    }
+
+    public void ZoomOut()
+    {
+        _radius = Math.Clamp(_radius * 1.25f, 5f, 500f);
+        InvalidateVisual();
+    }
+
+    public void ResetZoom()
+    {
+        if (_viewModel == null) return;
+        _radius = _viewModel.GridSize * 2.2f;
+        InvalidateVisual();
     }
 
     public override void Render(DrawingContext context)

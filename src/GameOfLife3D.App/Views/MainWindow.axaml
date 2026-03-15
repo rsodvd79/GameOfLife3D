@@ -31,6 +31,13 @@
             <TextBlock VerticalAlignment="Center" Text="{Binding Generation}" MinWidth="60" FontWeight="Bold"/>
             <TextBlock VerticalAlignment="Center" Foreground="#aaa">Alive:</TextBlock>
             <TextBlock VerticalAlignment="Center" Text="{Binding LiveCellCount}" MinWidth="60" FontWeight="Bold"/>
+            <Separator Width="1" Margin="4,0" Background="#444"/>
+            <Button x:Name="ZoomOutButton"   Content="−" FontSize="16" MinWidth="32"
+                    ToolTip.Tip="Zoom Out  (-)"/>
+            <Button x:Name="ZoomInButton"    Content="+" FontSize="16" MinWidth="32"
+                    ToolTip.Tip="Zoom In  (+)"/>
+            <Button x:Name="ZoomResetButton" Content="⌂" FontSize="14" MinWidth="32"
+                    ToolTip.Tip="Reset Zoom  (0)"/>
         </StackPanel>
 
         <!-- Bottom settings panel -->
@@ -67,6 +74,6 @@
         </Border>
 
         <!-- GL viewport -->
-        <controls:GameOfLifeGlControl MinWidth="600" MinHeight="600"/>
+        <controls:GameOfLifeGlControl x:Name="GameControl" MinWidth="600" MinHeight="600"/>
     </DockPanel>
 </Window>

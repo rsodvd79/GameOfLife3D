@@ -17,9 +17,11 @@ La simulazione si svolge su una griglia cubica toroidale (i bordi si collegano t
 - 🔲 **Griglia 3D toroidale** con vicinato di Moore a 26 celle
 - ▶️ **Simulazione in tempo reale** con velocità configurabile (1–60 step/s)
 - 🖱️ **Camera orbitale** — trascina per ruotare, rotella per zoom
+- 🔍 **Zoom con bottoni e tastiera** — pulsanti `−` `+` `⌂` nella toolbar, shortcut `+` `-` `0`
 - 🎛️ **Regole configurabili** — modifica le condizioni di sopravvivenza e nascita a caldo
 - 📐 **Dimensione griglia regolabile** — da 10³ a 50³ celle
 - 🎨 **Renderer Skia** — funziona su macOS, Windows e Linux senza OpenGL
+- 🖼️ **Icona personalizzata** — icona isometrica 3D nel dock/taskbar e nella titlebar
 
 ---
 
@@ -53,12 +55,15 @@ GameOfLife3D/
 │   │       ├── IRule3D.cs          # Interfaccia regola
 │   │       └── StandardRule3D.cs  # Regola "445" (sopravvive 5-7, nasce su 6)
 │   └── GameOfLife3D.App/           # Applicazione Avalonia
+│       ├── Assets/
+│       │   └── icon.png            # Icona isometrica 3D (256×256 RGBA)
 │       ├── Controls/
 │       │   └── GameOfLifeGlControl.cs   # Renderer 3D (Skia + proiezione prospettica)
 │       ├── ViewModels/
 │       │   └── MainViewModel.cs         # Stato e comandi (CommunityToolkit.Mvvm)
-│       └── Views/
-│           └── MainWindow.axaml         # Layout UI (toolbar, slider, viewport)
+│       ├── Views/
+│       │   └── MainWindow.axaml         # Layout UI (toolbar, slider, viewport)
+│       └── MacDockIcon.cs               # Icona dock macOS via ObjC runtime
 └── .github/
     └── copilot-instructions.md
 ```
@@ -89,16 +94,19 @@ Alcune regole interessanti da provare:
 
 ## Controlli
 
-| Azione                    | Come              |
-|--------------------------|-------------------|
-| Avviare/fermare la sim.   | Pulsante **Start/Stop** |
-| Eseguire un singolo step  | Pulsante **Step**  |
-| Generare una griglia random | Pulsante **Randomize** |
-| Pulire la griglia         | Pulsante **Clear** |
-| Ruotare la vista          | Trascina con il mouse |
-| Zoomare                   | Rotella del mouse  |
-| Cambiare velocità         | Slider **Speed**   |
-| Cambiare dimensione griglia | Slider **Grid Size** |
+| Azione                      | Come                                        |
+|-----------------------------|---------------------------------------------|
+| Avviare/fermare la sim.     | Pulsante **Start/Stop**                     |
+| Eseguire un singolo step    | Pulsante **Step**                           |
+| Generare una griglia random | Pulsante **Randomize**                      |
+| Pulire la griglia           | Pulsante **Clear**                          |
+| Ruotare la vista            | Trascina con il mouse                       |
+| Zoom in                     | Pulsante **+** nella toolbar  oppure tasto `+` |
+| Zoom out                    | Pulsante **−** nella toolbar  oppure tasto `-` |
+| Reset zoom                  | Pulsante **⌂** nella toolbar  oppure tasto `0` |
+| Zoom fine (rotella)         | Rotella del mouse                           |
+| Cambiare velocità           | Slider **Speed**                            |
+| Cambiare dimensione griglia | Slider **Grid Size**                        |
 
 ---
 
@@ -111,6 +119,10 @@ La griglia usa un **doppio buffer** (`_front` / `_back`): il motore scrive sulla
 
 **`GameOfLife3D.App`** — applicazione Avalonia con pattern MVVM.
 Il rendering 3D avviene in `GameOfLifeRenderOp` (implementa `ICustomDrawOperation`): le celle vive vengono proiettate nello spazio schermo tramite matrici `System.Numerics`, ordinate dalla più lontana alla più vicina (algoritmo del pittore) e disegnate come cerchi con sfumatura in profondità su un `SKCanvas`.
+
+La camera è in coordinate sferiche (`_radius`, `_theta`, `_phi`). Il raggio viene aggiornato solo quando cambia la dimensione della griglia, così le operazioni di zoom (rotella, pulsanti, tastiera) persistono correttamente tra un frame e l'altro.
+
+Su **macOS**, l'icona del dock viene impostata programmaticamente in `MacDockIcon.cs` tramite l'ObjC runtime (`NSApplication.setApplicationIconImage:`), necessario quando l'app gira fuori da un bundle `.app`.
 
 ---
 
