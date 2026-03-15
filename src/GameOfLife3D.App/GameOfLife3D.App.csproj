@@ -23,4 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="..\GameOfLife3D.Core\GameOfLife3D.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\icon.png" />
+  </ItemGroup>
 </Project>

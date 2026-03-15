@@ -20,6 +20,9 @@ public partial class App : Application
         {
             desktop.MainWindow = new MainWindow();
         }
+
+        MacDockIcon.Apply();
+
         base.OnFrameworkInitializationCompleted();
     }
 }
