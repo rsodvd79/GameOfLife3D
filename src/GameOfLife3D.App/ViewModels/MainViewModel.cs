@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Timers;
 using Avalonia.Threading;
@@ -39,6 +40,11 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string _birthCounts = "6";
+
+    public IReadOnlyList<Shape3D> AvailableShapes { get; } = ShapeLibrary.All;
+
+    [ObservableProperty]
+    private Shape3D _selectedShape = ShapeLibrary.All[0];
 
     public string SpeedLabel => $"{StepsPerSecond:F0} steps/s";
     public string GridSizeLabel => $"{GridSize}³";
@@ -130,6 +136,18 @@ public partial class MainViewModel : ObservableObject
     {
         Engine.Clear();
         Generation = 0;
+        UpdateLiveCellCount();
+        SimulationStepped?.Invoke(this, EventArgs.Empty);
+    }
+
+    [RelayCommand]
+    private void PlaceShape()
+    {
+        var rng = new Random();
+        int ox = rng.Next(Engine.Grid.SizeX);
+        int oy = rng.Next(Engine.Grid.SizeY);
+        int oz = rng.Next(Engine.Grid.SizeZ);
+        Engine.PlaceShape(SelectedShape, ox, oy, oz);
         UpdateLiveCellCount();
         SimulationStepped?.Invoke(this, EventArgs.Empty);
     }

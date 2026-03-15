@@ -48,4 +48,20 @@ public class SimulationEngine
         for (int z = 0; z < sz; z++)
             Grid.Set(x, y, z, false);
     }
+
+    /// <summary>
+    /// Stamps a shape onto the grid at the given origin (wraps toroidally).
+    /// Cells already alive are preserved; the shape only sets cells to alive.
+    /// </summary>
+    public void PlaceShape(Shape3D shape, int originX, int originY, int originZ)
+    {
+        int sx = Grid.SizeX, sy = Grid.SizeY, sz = Grid.SizeZ;
+        foreach (var (dx, dy, dz) in shape.Cells)
+        {
+            int x = ((originX + dx) % sx + sx) % sx;
+            int y = ((originY + dy) % sy + sy) % sy;
+            int z = ((originZ + dz) % sz + sz) % sz;
+            Grid.Set(x, y, z, true);
+        }
+    }
 }

@@ -92,6 +92,36 @@ Alcune regole interessanti da provare:
 
 ---
 
+## Forme predefinite
+
+La dropdown **Shape** nel pannello impostazioni permette di inserire pattern in una posizione casuale. Tutte le forme con prefisso 🔒 sono **matematicamente verificate** come strutture stabili per la regola "445".
+
+| Icona | Categoria | Comportamento |
+|-------|-----------|---------------|
+| 🔒 | **Still Life** | Non cambia mai — stabile per definizione |
+| 🌱 | **Seed** | Evolve in una struttura stabile in 1–2 step |
+| 📐 | **Geometrica** | Forma libera; l'evoluzione dipende dalla regola attiva |
+
+| Forma | Celle | Note |
+|-------|-------|------|
+| 🔒 Block 2×2×2 | 8 | Ogni cella ha 7 vicini → sopravvive sempre |
+| 🔒 Cross | 7 | Centro + 6 bracci assiali; ogni cella ha 5–6 vicini |
+| 🔒 Twin Blocks | 16 | Due blocchi separati, nessuna interazione |
+| 🔒 Rhombicubottaedro | 32 | Tutti i punti L1=3, L∞≤2; emerge da Cube/Shell |
+| 🌱 Shell 3×3×3 | 26 | → Rhombicubottaedro in 1 step |
+| 🌱 Cube 3×3×3 | 27 | → Rhombicubottaedro in 1 step |
+| 🌱 Slab 3×3×2 | 18 | → guscio 24 celle stabile in 1 step |
+| 📐 Single Cell | 1 | Muore subito con la regola 445 |
+| 📐 Plane 3×3 | 9 | Muore dopo 3 step |
+| 📐 Ring | 8 | Forma ad anello nel piano XY |
+| 📐 Pillar 1×5×1 | 5 | Colonna verticale |
+| 📐 Star | 13 | Stella con braccia da 2 |
+| 📐 Octahedron | 19 | Diamante con L1≤2 |
+
+> **Nota:** Nella regola S5,6,7/B6 ("445") oscillatori e alianti in forma semplice non sono stati documentati. Per esplorare pattern dinamici si consiglia di modificare la regola (es. `Survive=5,6,7,8` + `Birth=5,6`) e poi usare le forme Seed come punto di partenza.
+
+---
+
 ## Controlli
 
 | Azione                      | Come                                        |
