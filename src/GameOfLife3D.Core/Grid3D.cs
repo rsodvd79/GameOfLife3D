@@ -67,7 +67,7 @@ public class Grid3D
     public IEnumerable<(int x, int y, int z)> GetLiveCells()
     {
         bool[,,] snapshot;
-        lock (_lock) snapshot = _front;
+        lock (_lock) snapshot = (bool[,,])_front.Clone();
         for (int x = 0; x < SizeX; x++)
         for (int y = 0; y < SizeY; y++)
         for (int z = 0; z < SizeZ; z++)

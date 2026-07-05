@@ -74,8 +74,8 @@ public static class ShapeLibrary
         from dz in new[] { -1, 0, 1 }
         select (dx, dy, dz)).ToArray());
 
-    // 3×3×2 Slab (18 cells) → 24-cell stable shell in 1 step.
-    private static readonly Shape3D SlabSeed = new("🌱 Slab 3×3×2", (
+    // 3×2×3 Slab (18 cells) → 24-cell stable shell in 1 step.
+    private static readonly Shape3D SlabSeed = new("🌱 Slab 3×2×3", (
         from dx in new[] { -1, 0, 1 }
         from dz in new[] { -1, 0, 1 }
         from dy in new[] { 0, 1 }

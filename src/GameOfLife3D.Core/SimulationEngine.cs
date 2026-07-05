@@ -46,12 +46,11 @@ public class SimulationEngine
 
     public void Randomize(double density)
     {
-        var rng = new Random();
         int sx = Grid.SizeX, sy = Grid.SizeY, sz = Grid.SizeZ;
         for (int x = 0; x < sx; x++)
         for (int y = 0; y < sy; y++)
         for (int z = 0; z < sz; z++)
-            Grid.Set(x, y, z, rng.NextDouble() < density);
+            Grid.Set(x, y, z, Random.Shared.NextDouble() < density);
     }
 
     public void Clear()

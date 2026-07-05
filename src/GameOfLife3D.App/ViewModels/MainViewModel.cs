@@ -15,6 +15,7 @@ namespace GameOfLife3D.App.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private Timer _timer = new();
+    private volatile bool _timerActive;
     private StandardRule3D _rule;
 
     [ObservableProperty]
@@ -60,7 +61,7 @@ public partial class MainViewModel : ObservableObject
         var grid = new Grid3D(GridSize, GridSize, GridSize);
         Engine = new SimulationEngine(grid, _rule);
 
-        _timer.AutoReset = true;
+        _timer.AutoReset = false;
         _timer.Elapsed += OnTimerElapsed;
 
         Engine.Randomize(0.1);
@@ -102,7 +103,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             var parts = s.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            var result = parts.Select(int.Parse).ToArray();
+            var result = parts.Select(int.Parse).Where(v => v >= 0 && v <= 26).ToArray();
             return result.Length > 0 ? result : fallback;
         }
         catch { return fallback; }
@@ -125,6 +126,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void Randomize()
     {
+        if (IsRunning) return;
         Engine.Randomize(0.1);
         Generation = 0;
         UpdateLiveCellCount();
@@ -134,6 +136,7 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void Clear()
     {
+        if (IsRunning) return;
         Engine.Clear();
         Generation = 0;
         UpdateLiveCellCount();
@@ -143,10 +146,10 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void PlaceShape()
     {
-        var rng = new Random();
-        int ox = rng.Next(Engine.Grid.SizeX);
-        int oy = rng.Next(Engine.Grid.SizeY);
-        int oz = rng.Next(Engine.Grid.SizeZ);
+        if (IsRunning) return;
+        int ox = Random.Shared.Next(Engine.Grid.SizeX);
+        int oy = Random.Shared.Next(Engine.Grid.SizeY);
+        int oz = Random.Shared.Next(Engine.Grid.SizeZ);
         Engine.PlaceShape(SelectedShape, ox, oy, oz);
         UpdateLiveCellCount();
         SimulationStepped?.Invoke(this, EventArgs.Empty);
@@ -154,6 +157,7 @@ public partial class MainViewModel : ObservableObject
 
     private void StartSimulation()
     {
+        _timerActive = true;
         _timer.Interval = 1000.0 / Math.Max(1, StepsPerSecond);
         _timer.Start();
         IsRunning = true;
@@ -161,13 +165,20 @@ public partial class MainViewModel : ObservableObject
 
     private void StopSimulation()
     {
+        _timerActive = false;
         _timer.Stop();
         IsRunning = false;
     }
 
     private void OnTimerElapsed(object? sender, ElapsedEventArgs e)
     {
+        if (!_timerActive) return;
         DoStep();
+        if (_timerActive)
+        {
+            _timer.Interval = 1000.0 / Math.Max(1, StepsPerSecond);
+            _timer.Start();
+        }
     }
 
     private void DoStep()
