@@ -147,6 +147,16 @@ public partial class MainViewModel : ObservableObject
     private void PlaceShape()
     {
         if (IsRunning) return;
+
+        // A shape may carry a rule under which it behaves as documented
+        // (e.g. a glider only walks under S4,7 / B5). Apply it so the user
+        // sees the intended behaviour immediately.
+        if (SelectedShape.RecommendedRule is { } recommended)
+        {
+            SurvivalCounts = string.Join(",", recommended.Survive);
+            BirthCounts    = string.Join(",", recommended.Birth);
+        }
+
         int ox = Random.Shared.Next(Engine.Grid.SizeX);
         int oy = Random.Shared.Next(Engine.Grid.SizeY);
         int oz = Random.Shared.Next(Engine.Grid.SizeZ);

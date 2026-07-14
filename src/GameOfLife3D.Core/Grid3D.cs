@@ -37,8 +37,12 @@ public class Grid3D
     internal bool GetBack(int x, int y, int z) => _back[x, y, z];
     internal void SetBack(int x, int y, int z, bool value) => _back[x, y, z] = value;
 
-    // Read from front buffer without lock (used inside Step loop – single reader, writer uses back)
-    internal bool GetFront(int x, int y, int z) => _front[x, y, z];
+    // Snapshot the front buffer under the lock so a single Step() can read a
+    // consistent state even if the UI mutates _front between steps.
+    internal bool[,,] SnapshotFront()
+    {
+        lock (_lock) return (bool[,,])_front.Clone();
+    }
 
     public void Swap()
     {
@@ -48,7 +52,7 @@ public class Grid3D
         }
     }
 
-    public int CountNeighbors(int x, int y, int z)
+    public int CountNeighbors(bool[,,] buffer, int x, int y, int z)
     {
         int count = 0;
         for (int dx = -1; dx <= 1; dx++)
@@ -59,7 +63,7 @@ public class Grid3D
             int nx = (x + dx + SizeX) % SizeX;
             int ny = (y + dy + SizeY) % SizeY;
             int nz = (z + dz + SizeZ) % SizeZ;
-            if (GetFront(nx, ny, nz)) count++;
+            if (buffer[nx, ny, nz]) count++;
         }
         return count;
     }

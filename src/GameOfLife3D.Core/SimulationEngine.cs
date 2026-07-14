@@ -20,13 +20,17 @@ public class SimulationEngine
     {
         int sx = Grid.SizeX, sy = Grid.SizeY, sz = Grid.SizeZ;
 
+        // Work on a stable snapshot so concurrent UI writes to the front buffer
+        // (randomize/clear/place) can't corrupt this step's reads.
+        var front = Grid.SnapshotFront();
+
         // Cap births at 90 % of grid capacity to prevent exponential fill crashes.
         int maxLive = (int)(sx * sy * sz * 0.9);
         int currentLive = 0;
         for (int x = 0; x < sx; x++)
         for (int y = 0; y < sy; y++)
         for (int z = 0; z < sz; z++)
-            if (Grid.GetFront(x, y, z)) currentLive++;
+            if (front[x, y, z]) currentLive++;
 
         bool birthAllowed = currentLive < maxLive;
 
@@ -34,8 +38,8 @@ public class SimulationEngine
         for (int y = 0; y < sy; y++)
         for (int z = 0; z < sz; z++)
         {
-            bool current   = Grid.GetFront(x, y, z);
-            int  neighbors = Grid.CountNeighbors(x, y, z);
+            bool current   = front[x, y, z];
+            int  neighbors = Grid.CountNeighbors(front, x, y, z);
             bool next      = Rule.NextState(current, neighbors);
             // When at capacity suppress new births; existing cells still live/die normally.
             if (!current && !birthAllowed) next = false;

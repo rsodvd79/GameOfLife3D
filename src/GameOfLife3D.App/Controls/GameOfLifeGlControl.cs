@@ -169,7 +169,33 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
 
     public Rect Bounds => _bounds;
     public bool HitTest(Point p) => _bounds.Contains(p);
-    public bool Equals(ICustomDrawOperation? other) => false;
+
+    public bool Equals(ICustomDrawOperation? other)
+    {
+        if (other is not GameOfLifeRenderOp o) return false;
+        if (_bounds != o._bounds) return false;
+        if (_theta != o._theta || _phi != o._phi || _radius != o._radius) return false;
+        if (_target != o._target) return false;
+        if (_cells.Count != o._cells.Count) return false;
+        for (int i = 0; i < _cells.Count; i++)
+            if (_cells[i] != o._cells[i]) return false;
+        return true;
+    }
+
+    public override bool Equals(object? obj) => Equals(obj as ICustomDrawOperation);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(_bounds);
+        hash.Add(_theta);
+        hash.Add(_phi);
+        hash.Add(_radius);
+        hash.Add(_target);
+        hash.Add(_cells.Count);
+        return hash.ToHashCode();
+    }
+
     public void Dispose() { }
 
     public void Render(ImmediateDrawingContext context)
@@ -256,41 +282,42 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
             }
         }
 
-        // ── Painter's algorithm: back-to-front for both tubes and cells ──
-        tubes.Sort(static (a, b) => b.depth.CompareTo(a.depth));
-
-        // Build sorted cell index list
-        var sortedCells = new List<int>(_cells.Count);
+        // ── Painter's algorithm: back-to-front, tubes and cells interleaved ──
+        // Sort tubes and cells together by depth so a far cell can't paint over a
+        // nearer tube (and vice-versa). Depth is NDC z: larger = farther.
+        var drawOrder = new List<(float depth, bool isCell, int index)>(tubes.Count + _cells.Count);
+        for (int t = 0; t < tubes.Count; t++)
+            drawOrder.Add((tubes[t].depth, false, t));
         for (int i = 0; i < _cells.Count; i++)
-            if (projValid[i]) sortedCells.Add(i);
-        sortedCells.Sort((a, b) => projData[b].depth.CompareTo(projData[a].depth));
+            if (projValid[i]) drawOrder.Add((projData[i].depth, true, i));
+        drawOrder.Sort(static (a, b) => b.depth.CompareTo(a.depth));
 
-        // ── Draw tubes first (behind cells) ──
         using var tubeFillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
-
-        foreach (var (sx1, sy1, sx2, sy2, w1, w2, depth) in tubes)
-        {
-            float bright = Math.Clamp(1.15f - depth * 0.5f, 0.25f, 1f);
-            byte  tg     = (byte)(180 * bright);
-            byte  tb     = (byte)(140 * bright);
-            tubeFillPaint.StrokeWidth = Math.Min(w1, w2) * 0.5f;
-            tubeFillPaint.Color       = new SKColor(40, tg, tb, 190);
-            canvas.DrawLine(sx1, sy1, sx2, sy2, tubeFillPaint);
-        }
-
-        // ── Draw cells on top ──
         using var fillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
 
-        foreach (int i in sortedCells)
+        foreach (var (depth, isCell, index) in drawOrder)
         {
-            var (sx, sy, size, depth) = projData[i];
-            float bright = Math.Clamp(1.15f - depth * 0.5f, 0.3f, 1f);
-            byte g = (byte)(212 * bright);
-            byte b = (byte)(170 * bright);
-            float r = size * 0.5f;
+            if (isCell)
+            {
+                var (sx, sy, size, d) = projData[index];
+                float bright = Math.Clamp(1.15f - d * 0.5f, 0.3f, 1f);
+                byte g = (byte)(212 * bright);
+                byte b = (byte)(170 * bright);
+                float r = size * 0.5f;
 
-            fillPaint.Color = new SKColor(0, g, b, 210);
-            canvas.DrawCircle(sx, sy, r, fillPaint);
+                fillPaint.Color = new SKColor(0, g, b, 210);
+                canvas.DrawCircle(sx, sy, r, fillPaint);
+            }
+            else
+            {
+                var (sx1, sy1, sx2, sy2, w1, w2, d) = tubes[index];
+                float bright = Math.Clamp(1.15f - d * 0.5f, 0.25f, 1f);
+                byte  tg     = (byte)(180 * bright);
+                byte  tb     = (byte)(140 * bright);
+                tubeFillPaint.StrokeWidth = Math.Min(w1, w2) * 0.5f;
+                tubeFillPaint.Color       = new SKColor(40, tg, tb, 190);
+                canvas.DrawLine(sx1, sy1, sx2, sy2, tubeFillPaint);
+            }
         }
     }
 }

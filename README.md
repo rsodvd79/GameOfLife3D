@@ -89,17 +89,20 @@ Alcune regole interessanti da provare:
 | Coral        | 5,6,7,8 | 6,7,8 |
 | Amoeba       | 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26 | 3,5,6,7,8 |
 | Slow Decay   | 5,6,7,8 | 6     |
+| Glider (Bays) | 4,7    | 5     |
 
 ---
 
 ## Forme predefinite
 
-La dropdown **Shape** nel pannello impostazioni permette di inserire pattern in una posizione casuale. Tutte le forme con prefisso 🔒 sono **matematicamente verificate** come strutture stabili per la regola "445".
+La dropdown **Shape** nel pannello impostazioni permette di inserire pattern in una posizione casuale. Le forme con prefisso 🔒 (still life) e 🌱 (seed) sono **matematicamente verificate** per la regola "445"; 🔁 (Blinker) è verificato come oscillatore periodo-2.
 
 | Icona | Categoria | Comportamento |
 |-------|-----------|---------------|
 | 🔒 | **Still Life** | Non cambia mai — stabile per definizione |
 | 🌱 | **Seed** | Evolve in una struttura stabile in 1–2 step |
+| 🔁 | **Oscillator** | Torna alla configurazione iniziale dopo N step |
+| 🚀 | **Spaceship** | Si sposta nella griglia (aliante / camminatore) |
 | 📐 | **Geometrica** | Forma libera; l'evoluzione dipende dalla regola attiva |
 
 | Forma | Celle | Note |
@@ -107,10 +110,14 @@ La dropdown **Shape** nel pannello impostazioni permette di inserire pattern in 
 | 🔒 Block 2×2×2 | 8 | Ogni cella ha 7 vicini → sopravvive sempre |
 | 🔒 Cross | 7 | Centro + 6 bracci assiali; ogni cella ha 5–6 vicini |
 | 🔒 Twin Blocks | 16 | Due blocchi separati, nessuna interazione |
-| 🔒 Rhombicubottaedro | 32 | Tutti i punti L1=3, L∞≤2; emerge da Cube/Shell |
-| 🌱 Shell 3×3×3 | 26 | → Rhombicubottaedro in 1 step |
-| 🌱 Cube 3×3×3 | 27 | → Rhombicubottaedro in 1 step |
-| 🌱 Slab 3×3×2 | 18 | → guscio 24 celle stabile in 1 step |
+| 🔒 Rhombicuboctahedron | 32 | Tutti i punti L1=3, L∞≤2; emerge da Cube/Shell |
+| 🌱 Shell 3×3×3 | 26 | → Rhombicuboctahedron in 1 step |
+| 🌱 Cube 3×3×3 | 27 | → Rhombicuboctahedron in 1 step |
+| 🌱 Slab 3×2×3 | 18 | → guscio 24 celle stabile in 1 step |
+| 🔁 Blinker 2×3×1 | 6 | Oscillatore periodo-2 sotto la regola "445" |
+| 🚀 Glider (Bays 4,7/5) | 40 | Aliante periodo-8: si sposta di 4 celle/periodo. Richiede la regola `Survive=4,7` `Birth=5` |
+| 🚀 Glider (Bays 5,7/6) | 10 | Aliante periodo-4: si sposta di 1 cella/periodo (diag.). Funziona anche con la regola di default "445" |
+| 🚀 Glider (Bays 8/5) | 28 | Aliante periodo-8: si sposta di 4 celle/periodo. Richiede la regola `Survive=8` `Birth=5` |
 | 📐 Single Cell | 1 | Muore subito con la regola 445 |
 | 📐 Plane 3×3 | 9 | Muore dopo 3 step |
 | 📐 Ring | 8 | Forma ad anello nel piano XY |
@@ -118,7 +125,7 @@ La dropdown **Shape** nel pannello impostazioni permette di inserire pattern in 
 | 📐 Star | 13 | Stella con braccia da 2 |
 | 📐 Octahedron | 19 | Diamante con L1≤2 |
 
-> **Nota:** Nella regola S5,6,7/B6 ("445") oscillatori e alianti in forma semplice non sono stati documentati. Per esplorare pattern dinamici si consiglia di modificare la regola (es. `Survive=5,6,7,8` + `Birth=5,6`) e poi usare le forme Seed come punto di partenza.
+> **Nota:** Le forme con prefisso 🔒 e 🌱 sono verificate per la regola "445". La forma 🔁 **Blinker** è un oscillatore periodo-2 già sotto "445". La forma 🚀 **Glider** è uno spaceship di Carter Bays: si sposta solo sotto la regola `Survive=4,7` / `Birth=5`; "Piazzala" applica automaticamente tale regola prima di stamparla, così la vedi camminare. Sotto "445" non si muove.
 
 ---
 
@@ -145,10 +152,10 @@ La dropdown **Shape** nel pannello impostazioni permette di inserire pattern in 
 Il progetto è diviso in due layer netti:
 
 **`GameOfLife3D.Core`** — libreria pura, senza dipendenze UI, testabile in isolamento.
-La griglia usa un **doppio buffer** (`_front` / `_back`): il motore scrive sulla griglia posteriore durante lo step e chiama `Swap()` (thread-safe con lock) al termine. Il thread del timer e il thread di rendering non entrano mai in conflitto.
+La griglia usa un **doppio buffer** (`_front` / `_back`): `Step()` scatta uno snapshot di `_front` (sotto lock) e lo usa per tutti i calcoli, scrivendo il risultato su `_back` e chiamando `Swap()` (thread-safe con lock) al termine. Grazie allo snapshot, eventuali scritture UI concorrenti (`Randomize`/`Clear`/`PlaceShape`) non possono corrompere uno step in corso.
 
 **`GameOfLife3D.App`** — applicazione Avalonia con pattern MVVM.
-Il rendering 3D avviene in `GameOfLifeRenderOp` (implementa `ICustomDrawOperation`): le celle vive vengono proiettate nello spazio schermo tramite matrici `System.Numerics`, ordinate dalla più lontana alla più vicina (algoritmo del pittore) e disegnate come cerchi con sfumatura in profondità su un `SKCanvas`.
+Il rendering 3D avviene in `GameOfLifeRenderOp` (implementa `ICustomDrawOperation`): le celle vive e i tubi che collegano i vicini ortogonali vengono proiettati nello spazio schermo tramite matrici `System.Numerics` e inseriti in **un'unica lista ordinata per profondità** (algoritmo del pittore, dal più lontano al più vicino), così le celle e i tubi si sovrappongono correttamente. `Equals`/`GetHashCode` sono implementati per valore, permettendo ad Avalonia di riusare i frame invariati.
 
 La camera è in coordinate sferiche (`_radius`, `_theta`, `_phi`). Il raggio viene aggiornato solo quando cambia la dimensione della griglia, così le operazioni di zoom (rotella, pulsanti, tastiera) persistono correttamente tra un frame e l'altro.
 
