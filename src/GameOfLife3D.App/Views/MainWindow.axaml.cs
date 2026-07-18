@@ -17,6 +17,8 @@ public partial class MainWindow : Window
 
         KeyDown += (_, e) =>
         {
+            if (e.Source is TextBox) return;
+
             switch (e.Key)
             {
                 case Key.Add or Key.OemPlus:

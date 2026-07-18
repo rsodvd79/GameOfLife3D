@@ -8,12 +8,18 @@ namespace GameOfLife3D.Core;
 public class SimulationEngine
 {
     public Grid3D Grid { get; }
-    public IRule3D Rule { get; set; }
+
+    private IRule3D _rule;
+    public IRule3D Rule
+    {
+        get => _rule;
+        set => _rule = value ?? throw new ArgumentNullException(nameof(value));
+    }
 
     public SimulationEngine(Grid3D grid, IRule3D rule)
     {
-        Grid = grid;
-        Rule = rule;
+        Grid = grid ?? throw new ArgumentNullException(nameof(grid));
+        _rule = rule ?? throw new ArgumentNullException(nameof(rule));
     }
 
     public void Step()

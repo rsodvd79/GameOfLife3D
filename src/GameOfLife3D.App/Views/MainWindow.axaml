@@ -24,8 +24,8 @@
                     Content="{Binding StartStopLabel}"
                     MinWidth="80"/>
             <Button Command="{Binding StepCommand}" Content="Step" IsEnabled="{Binding !IsRunning}"/>
-            <Button Command="{Binding RandomizeCommand}" Content="Randomize"/>
-            <Button Command="{Binding ClearCommand}" Content="Clear"/>
+            <Button Command="{Binding RandomizeCommand}" Content="Randomize" IsEnabled="{Binding !IsRunning}"/>
+            <Button Command="{Binding ClearCommand}" Content="Clear" IsEnabled="{Binding !IsRunning}"/>
             <Separator Width="1" Margin="4,0" Background="#444"/>
             <TextBlock VerticalAlignment="Center" Foreground="#aaa">Gen:</TextBlock>
             <TextBlock VerticalAlignment="Center" Text="{Binding Generation}" MinWidth="60" FontWeight="Bold"/>
@@ -80,6 +80,7 @@
                               MinWidth="160"/>
                     <Button Command="{Binding PlaceShapeCommand}"
                             Content="Place at random position"
+                            IsEnabled="{Binding !IsRunning}"
                             ToolTip.Tip="Inserisce la forma in una posizione casuale della griglia"/>
                 </StackPanel>
             </Grid>

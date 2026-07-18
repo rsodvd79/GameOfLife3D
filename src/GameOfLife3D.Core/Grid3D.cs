@@ -1,5 +1,6 @@
 #nullable enable
 
+using System;
 using System.Collections.Generic;
 
 namespace GameOfLife3D.Core;
@@ -16,6 +17,9 @@ public class Grid3D
 
     public Grid3D(int sizeX, int sizeY, int sizeZ)
     {
+        if (sizeX <= 0 || sizeY <= 0 || sizeZ <= 0)
+            throw new ArgumentOutOfRangeException("Grid dimensions must be positive.");
+
         SizeX = sizeX;
         SizeY = sizeY;
         SizeZ = sizeZ;

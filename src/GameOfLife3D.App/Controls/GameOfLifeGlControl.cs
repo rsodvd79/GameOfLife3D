@@ -115,7 +115,10 @@ public class GameOfLifeGlControl : Control
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+
         _isDragging = true;
+        e.Pointer.Capture(this);
         _lastMousePos = e.GetPosition(this);
         e.Handled = true;
     }
@@ -124,6 +127,8 @@ public class GameOfLifeGlControl : Control
     {
         base.OnPointerReleased(e);
         _isDragging = false;
+        if (e.Pointer.Captured == this)
+            e.Pointer.Capture(null);
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
