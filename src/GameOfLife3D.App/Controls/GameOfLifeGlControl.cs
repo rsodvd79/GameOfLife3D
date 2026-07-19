@@ -15,21 +15,23 @@ using GameOfLife3D.App.ViewModels;
 namespace GameOfLife3D.App.Controls;
 
 public class GameOfLifeGlControl : Control
-{
-    private float _theta = 0.5f;
-    private float _phi = 1.1f;
-    private float _radius = 50f;
-    private Vector3 _target;
-
-    private bool _isDragging;
-    private Point _lastMousePos;
-    private MainViewModel? _viewModel;
-    private int _lastGridSize = -1;
-
-    public GameOfLifeGlControl()
     {
-        ClipToBounds = true;
-    }
+        private float _theta = 0.5f;
+        private float _phi = 1.1f;
+        private float _radius = 50f;
+        private Vector3 _target;
+
+        private bool _isDragging;
+        private Point _lastMousePos;
+        private MainViewModel? _viewModel;
+        private int _lastGridSize = -1;
+        private float _time = 0f;
+        private (Vector3 pos, float brightness)[]? _stars;
+
+        public GameOfLifeGlControl()
+        {
+            ClipToBounds = true;
+        }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -72,6 +74,30 @@ public class GameOfLifeGlControl : Control
         if (gridSize == _lastGridSize) return;
         _radius = gridSize * 2.2f;
         _lastGridSize = gridSize;
+        GenerateStars(gridSize);
+    }
+
+    private void GenerateStars(int gridSize)
+    {
+        var rand = new Random(gridSize * 12345); // deterministic per grid size
+        int count = Math.Clamp(gridSize * 2, 100, 500);
+        float radius = gridSize * 3f;
+        _stars = new (Vector3 pos, float brightness)[count];
+        for (int i = 0; i < count; i++)
+        {
+            // Uniform distribution on sphere
+            float u = (float)rand.NextDouble();
+            float v = (float)rand.NextDouble();
+            float theta = 2f * MathF.PI * u;
+            float phi = MathF.Acos(2f * v - 1f);
+            float r = radius * MathF.Pow((float)rand.NextDouble(), 1f / 3f);
+            var pos = new Vector3(
+                r * MathF.Sin(phi) * MathF.Cos(theta),
+                r * MathF.Cos(phi),
+                r * MathF.Sin(phi) * MathF.Sin(theta)
+            ) + _target;
+            _stars[i] = (pos, 0.3f + 0.7f * (float)rand.NextDouble());
+        }
     }
 
     public void ZoomIn()
@@ -103,13 +129,13 @@ public class GameOfLifeGlControl : Control
         }
 
         UpdateCameraForGrid(_viewModel.GridSize);
+        _time += 0.016f; // ~60fps time accumulator
 
-        // Snapshot live cells on the UI thread before passing to render op
         var cells = new List<(int x, int y, int z)>();
         foreach (var cell in _viewModel.Engine.Grid.GetLiveCells())
             cells.Add(cell);
 
-        context.Custom(new GameOfLifeRenderOp(bounds, cells, _theta, _phi, _radius, _target));
+        context.Custom(new GameOfLifeRenderOp(bounds, cells, _theta, _phi, _radius, _target, _time, _stars));
     }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -160,9 +186,12 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
     private readonly List<(int x, int y, int z)> _cells;
     private readonly float _theta, _phi, _radius;
     private readonly Vector3 _target;
+    private readonly float _time;
+    private readonly (Vector3 pos, float brightness)[]? _stars;
 
     public GameOfLifeRenderOp(Rect bounds, List<(int, int, int)> cells,
-        float theta, float phi, float radius, Vector3 target)
+        float theta, float phi, float radius, Vector3 target,
+        float time, (Vector3 pos, float brightness)[]? stars)
     {
         _bounds = bounds;
         _cells  = cells;
@@ -170,6 +199,8 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
         _phi    = phi;
         _radius = radius;
         _target = target;
+        _time   = time;
+        _stars  = stars;
     }
 
     public Rect Bounds => _bounds;
@@ -214,9 +245,7 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
         float h = (float)_bounds.Height;
         if (w <= 0 || h <= 0) return;
 
-        canvas.Clear(new SKColor(26, 26, 46)); // #1a1a2e
-
-        if (_cells.Count == 0) return;
+        canvas.Clear(new SKColor(26, 26, 46));
 
         // Build view-projection matrix (System.Numerics row-major)
         var eye = new Vector3(
@@ -230,9 +259,30 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
         var vp   = view * proj;
 
         float sizeBase = Math.Min(w, h);
+        float maxDepth = 1.5f;
+
+        if (_stars != null && _stars.Length > 0)
+        {
+            using var starPaint = new SKPaint { IsAntialias = false };
+            foreach (var (pos, bright) in _stars)
+            {
+                var wpos = new Vector4(pos, 1f);
+                var clip = Vector4.Transform(wpos, vp);
+                if (clip.W <= 0f) continue;
+                float invW = 1f / clip.W;
+                float sx = (clip.X * invW * 0.5f + 0.5f) * w;
+                float sy = (1f - (clip.Y * invW * 0.5f + 0.5f)) * h;
+                if (sx < 0 || sx > w || sy < 0 || sy > h) continue;
+                byte alpha = (byte)(bright * 180);
+                starPaint.Color = new SKColor(200, 210, 255, alpha);
+                canvas.DrawPoint(sx, sy, starPaint);
+            }
+        }
+
+        // Early out if no cells
+        if (_cells.Count == 0) return;
 
         // Project all cells; keep a positional lookup for tube detection.
-        // projData[i] corresponds to _cells[i]; null means clipped behind camera.
         var projData = new (float sx, float sy, float size, float depth)[_cells.Count];
         var projValid = new bool[_cells.Count];
         var cellIndex = new Dictionary<(int, int, int), int>(_cells.Count);
@@ -257,39 +307,32 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
         }
 
         // ── Build tube list (orthogonal neighbours only, +x/+y/+z to skip duplicates) ──
-        var tubes = new List<(float sx1, float sy1, float sx2, float sy2, float w1, float w2, float depth)>();
+        var tubes = new List<(float sx1, float sy1, float sx2, float sy2, float w1, float w2, float depth, float d1, float d2)>();
 
         for (int i = 0; i < _cells.Count; i++)
         {
             if (!projValid[i]) continue;
             var (cx, cy, cz) = _cells[i];
+            var (sx1, sy1, s1, d1) = projData[i];
 
-            // Check the 3 positive-direction orthogonal neighbours (avoids duplicate pairs).
-            // Inline instead of stackalloc – stackalloc inside a loop accumulates stack
-            // space until the method returns, causing StackOverflowException at high cell counts.
             if (cellIndex.TryGetValue((cx + 1, cy,     cz),     out int jx) && projValid[jx])
             {
-                var (sx1, sy1, s1, d1) = projData[i];
                 var (sx2, sy2, s2, d2) = projData[jx];
-                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f));
+                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f, d1, d2));
             }
             if (cellIndex.TryGetValue((cx,     cy + 1, cz),     out int jy) && projValid[jy])
             {
-                var (sx1, sy1, s1, d1) = projData[i];
                 var (sx2, sy2, s2, d2) = projData[jy];
-                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f));
+                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f, d1, d2));
             }
             if (cellIndex.TryGetValue((cx,     cy,     cz + 1), out int jz) && projValid[jz])
             {
-                var (sx1, sy1, s1, d1) = projData[i];
                 var (sx2, sy2, s2, d2) = projData[jz];
-                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f));
+                tubes.Add((sx1, sy1, sx2, sy2, s1, s2, (d1 + d2) * 0.5f, d1, d2));
             }
         }
 
-        // ── Painter's algorithm: back-to-front, tubes and cells interleaved ──
-        // Sort tubes and cells together by depth so a far cell can't paint over a
-        // nearer tube (and vice-versa). Depth is NDC z: larger = farther.
+        // ── Painter's algorithm: back-to-front ──
         var drawOrder = new List<(float depth, bool isCell, int index)>(tubes.Count + _cells.Count);
         for (int t = 0; t < tubes.Count; t++)
             drawOrder.Add((tubes[t].depth, false, t));
@@ -297,32 +340,187 @@ internal sealed class GameOfLifeRenderOp : ICustomDrawOperation
             if (projValid[i]) drawOrder.Add((projData[i].depth, true, i));
         drawOrder.Sort(static (a, b) => b.depth.CompareTo(a.depth));
 
-        using var tubeFillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
+        // Render scene to offscreen surface for bloom compositing
+        using var mainSurface = SKSurface.Create(new SKImageInfo((int)w, (int)h, SKColorType.Rgba8888));
+        var mainCanvas = mainSurface.Canvas;
+        mainCanvas.Clear(new SKColor(26, 26, 46, 0));
+
+        using var glowPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
         using var fillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
+        using var borderPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke };
+        using var tubeFillPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round };
 
         foreach (var (depth, isCell, index) in drawOrder)
         {
             if (isCell)
             {
                 var (sx, sy, size, d) = projData[index];
+                var (cx, cy, cz) = _cells[index];
                 float bright = Math.Clamp(1.15f - d * 0.5f, 0.3f, 1f);
-                byte g = (byte)(212 * bright);
-                byte b = (byte)(170 * bright);
+                float fog = Math.Clamp(1f - (d + 0.5f) / (maxDepth + 0.5f), 0.15f, 1f);
+                float alphaFog = fog * 255f;
                 float r = size * 0.5f;
 
-                fillPaint.Color = new SKColor(0, g, b, 210);
-                canvas.DrawCircle(sx, sy, r, fillPaint);
+                // Dynamic hue based on Z-layer and time
+                float hue = (cz * 0.04f + _time * 0.015f) % 1f;
+                float saturation = 75f;
+                float lightness = 45f + 25f * bright;
+
+                var cellColor = SKColor.FromHsl(hue * 360f, saturation, lightness, (byte)Math.Clamp(alphaFog, 0, 255));
+                var glowColor = SKColor.FromHsl(hue * 360f, saturation, lightness, (byte)Math.Clamp(alphaFog * 0.2f, 0, 255));
+                var borderColor = SKColor.FromHsl(hue * 360f, saturation, lightness + 15f, (byte)Math.Clamp(alphaFog * 0.5f, 0, 255));
+
+                // Glow layer
+                glowPaint.Color = glowColor;
+                mainCanvas.DrawCircle(sx, sy, r * 2.5f, glowPaint);
+
+                // Fill
+                fillPaint.Color = cellColor;
+                mainCanvas.DrawCircle(sx, sy, r, fillPaint);
+
+                // Thin border
+                borderPaint.Color = borderColor;
+                borderPaint.StrokeWidth = Math.Max(1f, r * 0.15f);
+                mainCanvas.DrawCircle(sx, sy, r - borderPaint.StrokeWidth * 0.5f, borderPaint);
             }
             else
             {
-                var (sx1, sy1, sx2, sy2, w1, w2, d) = tubes[index];
+                var (sx1, sy1, sx2, sy2, w1, w2, d, d1, d2) = tubes[index];
                 float bright = Math.Clamp(1.15f - d * 0.5f, 0.25f, 1f);
-                byte  tg     = (byte)(180 * bright);
-                byte  tb     = (byte)(140 * bright);
+                float fog = Math.Clamp(1f - (d + 0.5f) / (maxDepth + 0.5f), 0.1f, 1f);
+                float alphaFog = fog * 255f;
+                float avgZ = d1 + d2;
+                float hue = (avgZ * 0.02f + _time * 0.015f) % 1f;
+                float lightness = 40f + 20f * bright;
+                var tubeColor = SKColor.FromHsl(hue * 360f, 60f, lightness, (byte)Math.Clamp(alphaFog, 0, 255));
+
                 tubeFillPaint.StrokeWidth = Math.Min(w1, w2) * 0.5f;
-                tubeFillPaint.Color       = new SKColor(40, tg, tb, 190);
-                canvas.DrawLine(sx1, sy1, sx2, sy2, tubeFillPaint);
+                tubeFillPaint.Color = tubeColor;
+                mainCanvas.DrawLine(sx1, sy1, sx2, sy2, tubeFillPaint);
             }
+        }
+
+        // Composite: draw scene, then blur overlay for bloom
+        using var mainImage = mainSurface.Snapshot();
+        canvas.DrawImage(mainImage, 0, 0);
+
+        using var bloomPaint = new SKPaint
+        {
+            ImageFilter = SKImageFilter.CreateBlur(6f, 6f, SKShaderTileMode.Clamp),
+            BlendMode = SKBlendMode.Screen,
+            Color = new SKColor(255, 255, 255, 50)
+        };
+        canvas.DrawImage(mainImage, 0, 0, bloomPaint);
+
+        // ── Axis indicator ──
+        float axisLen = 40f;
+        float originX = 60f;
+        float originY = h - 60f;
+
+        // Project grid center to screen as reference
+        var centerWorld = new Vector4(_target, 1f);
+        var centerClip = Vector4.Transform(centerWorld, vp);
+        float centerScrX = 0f, centerScrY = 0f;
+        bool centerValid = centerClip.W > 0f;
+        if (centerValid)
+        {
+            float invW = 1f / centerClip.W;
+            centerScrX = (centerClip.X * invW * 0.5f + 0.5f) * w;
+            centerScrY = (1f - (centerClip.Y * invW * 0.5f + 0.5f)) * h;
+        }
+
+        var axisVectors = new Vector3[]
+        {
+            new Vector3(1, 0, 0), // X
+            new Vector3(0, 1, 0), // Y
+            new Vector3(0, 0, 1)  // Z
+        };
+
+        var axisColors = new SKColor[]
+        {
+            new SKColor(255, 80, 80, 220),   // X - red
+            new SKColor(80, 255, 80, 220),   // Y - green
+            new SKColor(80, 160, 255, 220)   // Z - blue
+        };
+
+        for (int i = 0; i < 3; i++)
+        {
+            // Project axis endpoint in world space
+            var axisWorld = new Vector4(_target + axisVectors[i] * 3f, 1f);
+            var axisClip = Vector4.Transform(axisWorld, vp);
+            if (axisClip.W <= 0f || !centerValid) continue;
+
+            float invW = 1f / axisClip.W;
+            float ax = (axisClip.X * invW * 0.5f + 0.5f) * w;
+            float ay = (1f - (axisClip.Y * invW * 0.5f + 0.5f)) * h;
+
+            // Screen-space direction from projected center to projected axis tip
+            float dx = ax - centerScrX;
+            float dy = ay - centerScrY;
+            float len = MathF.Sqrt(dx * dx + dy * dy);
+            if (len < 0.001f) continue;
+
+            float scale = axisLen / len;
+            float endX = originX + dx * scale;
+            float endY = originY + dy * scale;
+
+            using var axisPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 3f,
+                Color = axisColors[i],
+                StrokeCap = SKStrokeCap.Round
+            };
+            canvas.DrawLine(originX, originY, endX, endY, axisPaint);
+
+            // Arrow tip
+            float tipSize = 8f;
+            float nx = -dy / len;
+            float ny = dx / len;
+            using var tipPath = new SKPath();
+            tipPath.MoveTo(endX, endY);
+            tipPath.LineTo(endX - dx / len * tipSize - nx * tipSize * 0.5f, endY - dy / len * tipSize - ny * tipSize * 0.5f);
+            tipPath.LineTo(endX - dx / len * tipSize + nx * tipSize * 0.5f, endY - dy / len * tipSize + ny * tipSize * 0.5f);
+            tipPath.Close();
+            using var tipPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Style = SKPaintStyle.Fill,
+                Color = axisColors[i]
+            };
+            canvas.DrawPath(tipPath, tipPaint);
+        }
+
+        // Labels
+        string[] labels = { "X", "Y", "Z" };
+        for (int i = 0; i < 3; i++)
+        {
+            var axisWorld = new Vector4(_target + axisVectors[i] * 3.5f, 1f);
+            var axisClip = Vector4.Transform(axisWorld, vp);
+            if (axisClip.W <= 0f || !centerValid) continue;
+
+            float invW = 1f / axisClip.W;
+            float ax = (axisClip.X * invW * 0.5f + 0.5f) * w;
+            float ay = (1f - (axisClip.Y * invW * 0.5f + 0.5f)) * h;
+
+            float dx = ax - centerScrX;
+            float dy = ay - centerScrY;
+            float len = MathF.Sqrt(dx * dx + dy * dy);
+            if (len < 0.001f) continue;
+
+            float scale = (axisLen + 14f) / len;
+            float lx = originX + dx * scale - 5f;
+            float ly = originY + dy * scale + 5f;
+
+            using var labelPaint = new SKPaint
+            {
+                IsAntialias = true,
+                Color = axisColors[i],
+                TextSize = 13f,
+                TextAlign = SKTextAlign.Center
+            };
+            canvas.DrawText(labels[i], lx, ly, labelPaint);
         }
     }
 }
